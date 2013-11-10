@@ -85,6 +85,9 @@
 #
 # %ancestors for %inferredTree now comes from transitivity json instead of topology.
 # Added more %colorMap values for new types.  2013 10 31
+#
+# changed $solr_url to be a $base_solr_url and created &getSolrUrl to generate the $solr_url based on the identifier prefix
+# to direct to the proper solr subdirectory.  2013 11 09
 
 
 use CGI;
@@ -104,7 +107,7 @@ my $gviz = GraphViz->new(concentrate => 'concentrate');
 my $gviz_legend = GraphViz->new(concentrate => 'concentrate', rankdir  => 'BT');
 my $json = JSON->new->allow_nonref;
 my $query = new CGI;
-my $solr_url = 'http://131.215.12.220:8080/solr/';		# raymond URL 2013 08 06
+my $base_solr_url = 'http://131.215.12.220:8080/solr/';		# raymond URL 2013 08 06
 # my $solr_url = 'http://golr.berkeleybop.org/';
 
 my %paths;	# finalpath => array of all (array of nodes of paths that end)
@@ -126,8 +129,21 @@ sub process {
     else { &dag(); }				# no action, show dag by default
 } # sub process
 
+sub getSolrUrl {
+  my ($focusTermId) = @_;
+  my ($identifierType) = $focusTermId =~ m/^(\w+):/;
+  my %idToSubdirectory;
+  $idToSubdirectory{"WBbt"}        = "anatomy";
+  $idToSubdirectory{"DOID"}        = "disease";
+  $idToSubdirectory{"GO"}          = "go";
+  $idToSubdirectory{"WBls"}        = "lifestage";
+  $idToSubdirectory{"WBPhenotype"} = "phenotype";
+  my $solr_url = $base_solr_url . $idToSubdirectory{$identifierType} . '/';
+} # sub getSolrUrl
+
 sub getTopoHash {
   my ($focusTermId) = @_;
+  my ($solr_url) = &getSolrUrl($focusTermId);
   my $url = $solr_url . "select?qt=standard&fl=*&version=2.2&wt=json&indent=on&rows=1&q=id:%22" . $focusTermId . "%22&fq=document_category:%22ontology_class%22";
   
   my $page_data = get $url;
@@ -528,7 +544,9 @@ sub makeGenesLink {				# give a focusTermId, number of genes for that focusTermI
 sub getGenesCountHash {				# for a given focusTermId, get the genes count of itself and its direct children, option direct or inferred genes
   my ($focusTermId, $directOrInferred) = @_;
   my %genesCount;				# count of genes for the given direct vs inferred
+  my ($solr_url) = &getSolrUrl($focusTermId);
   my $url = $solr_url . 'select?qt=standard&indent=on&wt=json&version=2.2&fl=id&start=0&rows=10000000&q=document_category:bioentity&facet=true&facet.field=annotation_class_list&facet.limit=-1&facet.mincount=1&facet.prefix=GO&facet.sort=count&fq=source:%22WB%22&fq=annotation_class_list:%22' . $focusTermId . '%22';
+# print "URL $url URL";		# currently not getting the right counts because facet_count->facet_fields->annotation_class_list is empty.  2013 11 09
   my $searchField = 'annotation_class_list';	# by default assume direct search for URL and JSON field
   if ($directOrInferred eq 'inferred') { 	# if inferred, change the URL and JSON field
     $searchField = 'regulates_closure';
@@ -553,6 +571,7 @@ sub showGenes {					# page to show gene products linked to a focusTermId
 #   my ($var, $directOrInferred) = &getHtmlVar($query, 'directOrInferred');
   my ($var, $focusTermName) = &getHtmlVar($query, 'focusTermName');
   my %url;
+  my ($solr_url) = &getSolrUrl($focusTermId);
   $url{"direct"} = $solr_url . 'select?qt=standard&indent=on&wt=json&version=2.2&fl=id&start=0&rows=10000000&q=document_category:bioentity&fq=source:%22WB%22&fq=%7B!cache=false%7Dannotation_class_list:%22'. $focusTermId . '%22';	# with wbgenes listed, more specific q, cache off
   $url{"inferred"} = $solr_url . 'select?qt=standard&indent=on&wt=json&version=2.2&fl=id&start=0&rows=10000000&q=document_category:bioentity&fq=source:%22WB%22&fq=%7B!cache=false%7Dregulates_closure:%22' . $focusTermId . '%22';	# with wbgenes listed, more specific q, cache off
   foreach my $type (sort keys %url) {
@@ -728,6 +747,7 @@ sub untaint {
 # REVERT
 sub getInferredGenesHrefTarget {
   my ($focusTermId) = @_;
+  my ($solr_url) = &getSolrUrl($focusTermId);
   my $inferredUrl = $solr_url . 'select?qt=standard&indent=on&wt=json&version=2.2&fl=%2Cscore&fq=&q=*:*&fq=document_category:%22bioentity%22&fq=source:%22WB%22&fq=regulates_closure:%22' . $focusTermId . '%22';	# just the numFound
   my $inferredPage = get $inferredUrl; my $inferredNumFound = 0; 
   if ($inferredPage =~ m/"numFound":(\d+),/) { $inferredNumFound = $1; }
@@ -741,6 +761,7 @@ sub getInferredGenesHrefTarget {
 
 # sub getDirectGenesHrefTarget {
 #   my ($goid) = @_;
+#   my ($solr_url) = &getSolrUrl($goid);
 #   my $directUrl = $solr_url . 'select?qt=standard&indent=on&wt=json&version=2.2&fl=id%2Cscore&fq=&q=*:*&fq=document_category:%22bioentity%22&fq=source:%22WB%22&fq=annotation_class_list:%22' . $goid . '%22';	# just the numFound
 #   my $directPage = get $directUrl; my $directNumFound = 0; 
 #   if ($directPage =~ m/"numFound":(\d+),/) { $directNumFound = $1; }
