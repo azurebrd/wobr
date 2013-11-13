@@ -88,6 +88,8 @@
 #
 # changed $solr_url to be a $base_solr_url and created &getSolrUrl to generate the $solr_url based on the identifier prefix
 # to direct to the proper solr subdirectory.  2013 11 09
+#
+# removed &facet.prefix=GO  since for most solr queries, it's not GO.  2013 11 12
 
 
 use CGI;
@@ -545,12 +547,13 @@ sub getGenesCountHash {				# for a given focusTermId, get the genes count of its
   my ($focusTermId, $directOrInferred) = @_;
   my %genesCount;				# count of genes for the given direct vs inferred
   my ($solr_url) = &getSolrUrl($focusTermId);
-  my $url = $solr_url . 'select?qt=standard&indent=on&wt=json&version=2.2&fl=id&start=0&rows=10000000&q=document_category:bioentity&facet=true&facet.field=annotation_class_list&facet.limit=-1&facet.mincount=1&facet.prefix=GO&facet.sort=count&fq=source:%22WB%22&fq=annotation_class_list:%22' . $focusTermId . '%22';
+#   my $url = $solr_url . 'select?qt=standard&indent=on&wt=json&version=2.2&fl=id&start=0&rows=10000000&q=document_category:bioentity&facet=true&facet.field=annotation_class_list&facet.limit=-1&facet.mincount=1&facet.prefix=GO&facet.sort=count&fq=source:%22WB%22&fq=annotation_class_list:%22' . $focusTermId . '%22';
+  my $url = $solr_url . 'select?qt=standard&indent=on&wt=json&version=2.2&fl=id&start=0&rows=10000000&q=document_category:bioentity&facet=true&facet.field=annotation_class_list&facet.limit=-1&facet.mincount=1&facet.sort=count&fq=source:%22WB%22&fq=annotation_class_list:%22' . $focusTermId . '%22';
 # print "URL $url URL";		# currently not getting the right counts because facet_count->facet_fields->annotation_class_list is empty.  2013 11 09
   my $searchField = 'annotation_class_list';	# by default assume direct search for URL and JSON field
   if ($directOrInferred eq 'inferred') { 	# if inferred, change the URL and JSON field
     $searchField = 'regulates_closure';
-    $url = $solr_url . 'select?qt=standard&indent=on&wt=json&version=2.2&fl=id&start=0&rows=10000000&q=document_category:bioentity&facet=true&facet.field=regulates_closure&facet.limit=-1&facet.mincount=1&facet.prefix=GO&facet.sort=count&fq=source:%22WB%22&fq=regulates_closure:%22' . $focusTermId . '%22'; }
+    $url = $solr_url . 'select?qt=standard&indent=on&wt=json&version=2.2&fl=id&start=0&rows=10000000&q=document_category:bioentity&facet=true&facet.field=regulates_closure&facet.limit=-1&facet.mincount=1&facet.sort=count&fq=source:%22WB%22&fq=regulates_closure:%22' . $focusTermId . '%22'; }
   my $page_data = get $url;
   my $perl_scalar = $json->decode( $page_data );
   my %jsonHash = %$perl_scalar;
