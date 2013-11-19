@@ -83,13 +83,18 @@
 # Generalized this and javascript to work for any ontology term, working off of termIDs instead of termNumbers.
 # Added root terms for expandable tree for worm anatomy, disease ontology, worm development, elegans phenotype ontology.  2013 10 28
 #
-# %ancestors for %inferredTree now comes from transitivity json instead of topology.
+# %ancestors (nodes) for %inferredTree now comes from transitivity json instead of topology. (but the edges are still from topology)
 # Added more %colorMap values for new types.  2013 10 31
 #
 # changed $solr_url to be a $base_solr_url and created &getSolrUrl to generate the $solr_url based on the identifier prefix
 # to direct to the proper solr subdirectory.  2013 11 09
 #
 # removed &facet.prefix=GO  since for most solr queries, it's not GO.  2013 11 12
+#
+# there are predicate relationships from the topoHash are non transitive and should be ignored for determining indendation depth 
+# (pretend the edge doesn't exist), track them in hash  %ignoreNonTransitivePredicate  2013 11 13
+#
+# was still linking to  showInferredGenes  instead of just  showGenes .  2013 11 18
 
 
 use CGI;
@@ -335,12 +340,12 @@ sub dag {
   $colorMap{"positively_regulates"}          = 'green';
   $colorMap{"negatively_regulates"}          = 'red';
   $colorMap{"occurs_in"}                     = 'cyan';
-  $colorMap{"daughter of"}                   = 'pink';
-  $colorMap{"daughter of in hermaphrodite"}  = 'pink';
-  $colorMap{"daughter of in male"}           = 'pink';
-  $colorMap{"develops from"}                 = 'brown';
+  $colorMap{"daughter_of"}                   = 'pink';
+  $colorMap{"daughter_of_in_hermaphrodite"}  = 'pink';
+  $colorMap{"daughter_of_in_male"}           = 'pink';
+  $colorMap{"develops_from"}                 = 'brown';
   $colorMap{"xunion_of"}                     = 'brown';
-  $colorMap{"exclusive union of"}            = 'brown';
+  $colorMap{"exclusive_union_of"}            = 'brown';
   my %edgeTypeExists;
   
   my %child;				# for any term, each subkey is a child
@@ -637,8 +642,8 @@ sub getLongestPathAndTransitivity {			# given two nodes, get the longest path an
   $transitivity_priority{"has_part"}             = 2;
   $transitivity_priority{"part_of"}              = 3;
   $transitivity_priority{"regulates"}            = 4;
-  $transitivity_priority{"positively_regulates"} = 5;
-  $transitivity_priority{"negatively_regulates"} = 6;
+  $transitivity_priority{"negatively_regulates"} = 5;
+  $transitivity_priority{"positively_regulates"} = 6;
   $transitivity_priority{"occurs_in"}            = 7;
   $transitivity_priority{"unknown"}              = 8;			# in case some relationship or pair of relationships is unaccounted for
   my @all_inferred_paths_transitivity = sort { $transitivity_priority{$b} <=> $transitivity_priority{$a} } keys %each_finalpath_transitivity ;
@@ -649,8 +654,16 @@ sub getLongestPathAndTransitivity {			# given two nodes, get the longest path an
 } # sub getLongestPathAndTransitivity 
 
 sub recurseLongestPath {
+
   my ($current, $start, $end, $curpath) = @_;				# current node, starting node, end node, path travelled so far
+  my %ignoreNonTransitivePredicate;					# there predicate relationships from the topoHash are non transitive and should be ignored for determining indendation depth (pretend the edge doesn't exist) 2013 11 13
+  $ignoreNonTransitivePredicate{"daughter_of"}++;
+  $ignoreNonTransitivePredicate{"daughter_of_in_hermaphrodite"}++;
+  $ignoreNonTransitivePredicate{"daughter_of_in_male"}++;
+  $ignoreNonTransitivePredicate{"develops_from"}++;
+  $ignoreNonTransitivePredicate{"exclusive_union_of"}++;
   foreach my $parent (sort keys %{ $paths{"childToParent"}{$current} }) {	# for each parent of the current node
+    next if ($ignoreNonTransitivePredicate{$paths{"childToParent"}{$current}{$parent}});	# skip non-transitive edges
     my @curpath = split/\t/, $curpath;					# convert current path to array
     push @curpath, $parent;						# add the current parent
     if ($parent eq $end) {						# if current parent is the end node
@@ -664,7 +677,7 @@ sub recurseLongestPath {
 
 sub getInferredRelationship {
   my ($one, $two) = @_; my $relationship = 'unknown';
-  if ($one eq 'is_a') { 
+  if ($one eq 'is_a') {
       if ($two eq 'is_a') {                     $relationship = 'is_a';                  }
       elsif ($two eq 'part_of') {               $relationship = 'part_of';               }
       elsif ($two eq 'regulates') {             $relationship = 'regulates';             }
@@ -758,7 +771,7 @@ sub getInferredGenesHrefTarget {
   my $inferredLink = '0 gene products';
   if ($inferredNumFound > 0) {
 #     $inferredLink = qq(<a target="new" href="amigo.cgi?action=showInferredGenes&focusTermId=$focusTermId">$inferredNumFound (direct+inferred)</a>);
-    $inferredLink = qq(<a target="new" href="amigo.cgi?action=showInferredGenes&focusTermId=$focusTermId">$inferredNumFound gene products</a>); }
+    $inferredLink = qq(<a target="new" href="amigo.cgi?action=showGenes&focusTermId=$focusTermId">$inferredNumFound gene products</a>); }
   return $inferredLink;
 } # sub getInferredGenesHrefTarget
 
